@@ -19,9 +19,13 @@ pub mod filters;
 pub mod openings;
 pub mod pgn;
 
+// Re-export rusqlite so downstream crates (chess-server) can open SQLite game databases
+// without declaring the dependency themselves.
+pub use rusqlite;
+
 /// Public helper: piece letter for a board cell ('p','n','b','r','q','k').
 pub fn piece_letter(p: u8) -> String {
-    use board::{piece_type, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK};
+    use board::{piece_type, BISHOP, KNIGHT, PAWN, QUEEN, ROOK};
     if p == 0 {
         return "-".into();
     }

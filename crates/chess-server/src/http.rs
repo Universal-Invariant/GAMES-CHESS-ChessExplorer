@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct Request {
     pub method: String,
@@ -67,7 +67,7 @@ impl HttpServer {
                 let routes = routes.clone();
                 let root = shared_root.clone();
                 std::thread::spawn(move || {
-                    let _ = handle_conn(stream, &routes, root.as_ref().as_deref());
+                    let _ = handle_conn(stream, &routes, root.as_ref());
                 });
             }
         }
@@ -235,4 +235,4 @@ pub fn json_body(req: &Request) -> Result<serde_json::Value, String> {
     serde_json::from_str(&req.body).map_err(|e| e.to_string())
 }
 
-pub use Mutex as StateMutex;
+

@@ -269,6 +269,11 @@ impl Parser {
         match self.peek() {
             Some(t) if t.kind == TokKind::Ident || t.kind == TokKind::Str => {
                 let s = t.text.clone();
+                // reserved logical keywords must never be consumed as field names,
+                // otherwise `a:1 or b:2` mis-parses ("or" looks like a bare field).
+                if matches!(s.as_str(), "and" | "or" | "not") {
+                    return Err(format!("unexpected keyword '{}'", s));
+                }
                 self.pos += 1;
                 Ok(s)
             }
