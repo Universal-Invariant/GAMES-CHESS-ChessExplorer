@@ -55,6 +55,8 @@ pub struct Move {
     pub flag: u8, // 0 normal, 1 castleK, 2 castleQ, 3 ep-capture
 }
 
+// Piece-type alias for the rook movement check (bit 7 layout: type bits are & 7).
+
 pub const F_CASTLE_K: u8 = 1;
 pub const F_CASTLE_Q: u8 = 2;
 pub const F_EP: u8 = 3;
@@ -488,11 +490,12 @@ impl State {
                     }
                     // castling
                     if !self.in_check(us) {
-                        let home_rank: u8 = if us == 0 { 7 } else { 0 };
+                        let home_rank: u8 = if us == 0 { 0 } else { 7}; // white king on rank 1 (chess rank 0), black on rank 8
                         let kbit = if us == 0 { 1 } else { 4 };
                         let qbit = if us == 0 { 2 } else { 8 };
                         let king_sq = sq(4, home_rank);
-                        if self.board[king_sq as usize] == (KING | if us == 0 { 8 } else { 0 }) {
+                        let kp = self.board[king_sq as usize];
+                        if piece_type(kp) == KING && color_of(kp) == us {
                             if self.castling & kbit != 0 {
                                 // g,f empty; king transit squares e,f,g not attacked
                                 let f1 = sq(5, home_rank);
@@ -596,11 +599,12 @@ impl State {
         if piece_type(piece) == KING {
             ns.castling &= if us == 0 { !3 } else { !12 };
         }
+        // Rook home squares: white rooks live on rank 1 (sq(f,0)), black on rank 8 (sq(f,7)).
         for &(s, bit) in &[
-            (sq(0, 7), 2u8),
-            (sq(7, 7), 1u8),
-            (sq(0, 0), 8u8),
-            (sq(7, 0), 4u8),
+            (sq(0, 0), 2u8),  // a1 -> white queenside
+            (sq(7, 0), 1u8),  // h1 -> white kingside
+            (sq(0, 7), 8u8),  // a8 -> black queenside
+            (sq(7, 7), 4u8),  // h8 -> black kingside
         ] {
             if m.from == s || m.to == s {
                 ns.castling &= !bit;
@@ -797,31 +801,6 @@ mod tests {
         assert_eq!(perft(&s, 4), 197281);
     }
 
-    #[test]
-    fn dbg_kiwipete() {
-        let s = State::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1").unwrap();
-        let pseudo = s.generate_moves();
-        eprintln!("pseudo count {}", pseudo.len());
-        for m in &pseudo {
-            if m.flag != 0 {
-                eprintln!("special: {} flag {} san {}", sq_name(m.to), m.flag, s.san(*m));
-            }
-        }
-        let legal = s.legal_moves();
-        eprintln!("legal count {}", legal.len());
-        for m in &pseudo {
-            if !legal.contains(m) {
-                eprintln!(
-                    "filtered: {}->{} flag {} promo {}",
-                    sq_name(m.from),
-                    sq_name(m.to),
-                    m.flag,
-                    m.promo
-                );
-            }
-        }
-        panic!("dbg");
-    }
 
     #[test]
     fn perft_kiwipete() {
