@@ -587,11 +587,11 @@ impl State {
         let placed = if m.promo != 0 { m.promo | if us == 0 { 8 } else { 0 } } else { piece };
         ns.board[m.to as usize] = placed;
         if m.flag == F_CASTLE_K {
-            let hr = if us == 0 { 7u8 } else { 0u8 };
+            let hr = if us == 0 { 0u8 } else { 7u8 };
             ns.board[sq(7, hr) as usize] = 0;
             ns.board[sq(5, hr) as usize] = ROOK | if us == 0 { 8 } else { 0 };
         } else if m.flag == F_CASTLE_Q {
-            let hr = if us == 0 { 7u8 } else { 0u8 };
+            let hr = if us == 0 { 0u8 } else { 7u8 };
             ns.board[sq(0, hr) as usize] = 0;
             ns.board[sq(3, hr) as usize] = ROOK | if us == 0 { 8 } else { 0 };
         }

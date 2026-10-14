@@ -19,10 +19,10 @@ use chess_core::{
     analysis::{self, classify_move, default_modules, EvalPoint},
     board::State,
     db::GameDb,
-    engine::{get_engine, ChessEngine},
+    engine::get_engine,
     filters,
     openings::OpeningDb,
-    pgn::{parse_pgn, PgnCursor},
+    pgn::PgnCursor,
 };
 use http::{HttpServer, Request, Response};
 use serde_json::{json, Value};
@@ -221,17 +221,16 @@ fn main() {
                     }
                     // final position eval to classify last move
                     let fin = eng.evaluate(&stpos.to_fen(), ms).map(|e| e.cp).unwrap_or(0);
-                    let mut prev = evals_by_ply.first().cloned().flatten();
                     let _ = fin;
-                    for (i, san) in sans.iter().enumerate() {
-                        let before = evals_by_ply[i];
+                    for i in 0..sans.len() {
+                        let before = evals_by_ply[i].clone();
                         let after = if i + 1 < evals_by_ply.len() {
-                            evals_by_ply[i + 1]
+                            evals_by_ply[i + 1].clone()
                         } else {
                             Some((fin, String::new()))
                         };
                         let mover_white = i % 2 == 0;
-                        let class = match (before, after) {
+                        let class = match (&before, &after) {
                             (Some(b), Some(a)) => classify_move(
                                 EvalPoint { cp: b.0, mate: None },
                                 EvalPoint { cp: a.0, mate: None },
@@ -240,8 +239,7 @@ fn main() {
                             .to_string(),
                             _ => "good".to_string(),
                         };
-                        engine_evals.push((i, before.map(|b| b.0).unwrap_or(0), before.map(|b| b.1.clone()).unwrap_or_default(), class));
-                        prev = before;
+                        engine_evals.push((i, before.as_ref().map(|b| b.0).unwrap_or(0), before.map(|b| b.1).unwrap_or_default(), class));
                     }
                     // persist analyses
                     for (ply, cp, best, class) in &engine_evals {
@@ -284,7 +282,7 @@ fn main() {
                     Ok(b) => b,
                     Err(e) => return Response::err(&e),
                 };
-                let mut s = st.lock().unwrap();
+                let s = st.lock().unwrap();
                 let mut client = AiClient::new(s.ai_cfg.clone());
                 if let Some(game_id) = body["game_id"].as_i64() {
                     if body["analyze"].as_bool().unwrap_or(false) {
@@ -341,7 +339,7 @@ fn main() {
                     .openings
                     .children_of(&sans)
                     .into_iter()
-                    .map(|(san, open)| json!({"san": san, "eco": open.as_ref().map(|o| o.0.clone()), "name": open.as_ref().map(|o| o.1.clone())}))
+                    .map(|(san, open)| json!({"san": san, "eco": open.as_ref().map(|o| o.eco.clone()), "name": open.as_ref().map(|o| o.name.clone())}))
                     .collect::<Vec<_>>();
                 let stats = s
                     .db
@@ -440,7 +438,7 @@ fn main() {
             let st = state.clone();
             move |_req: &Request| {
                 let s = st.lock().unwrap();
-                let mut eng = get_engine(None);
+                let eng = get_engine(None);
                 Response::json(
                     json!({
                         "games": s.db.count(),
@@ -471,7 +469,7 @@ fn do_import(state: &mut AppState, path: &str) -> i64 {
     let mut n = 0i64;
     let lower = path.to_ascii_lowercase();
     if lower.ends_with(".db") || lower.ends_with(".sqlite") || lower.ends_with(".sqlite3") {
-        if let Ok(conn) = rusqlite_conn(path) {
+        if let Ok(conn) = sqlite_conn(path) {
             if let Ok(games) = chess_core::pgn::import_sqlite_games(path, &conn) {
                 for g in games {
                     let _ = state.db.add_game(&g, &state.openings);
@@ -493,11 +491,6 @@ fn do_import(state: &mut AppState, path: &str) -> i64 {
     n
 }
 
-fn rusqlite_conn(path: &str) -> Result<rusqlite::Connection, String> {
-    rusqlite::Connection::open(path).map_err(|e| e.to_string())
-}
-
-// small helper used by tests/CLI elsewhere
-pub fn parse_one_pgn(text: &str) -> Option<chess_core::pgn::Game> {
-    parse_pgn(text)
+fn sqlite_conn(path: &str) -> Result<chess_core::rusqlite::Connection, String> {
+    chess_core::rusqlite::Connection::open(path).map_err(|e| e.to_string())
 }

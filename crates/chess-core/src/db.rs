@@ -315,7 +315,7 @@ pub fn render_pgn(game: &Game, eco: &str, opening: &str, sans: &[String]) -> Str
         .as_deref()
         .and_then(State::from_fen)
         .unwrap_or_else(State::start);
-    let mut moveno = st.fullmove;
+    let moveno = st.fullmove;
     let mut line_len = 0;
     for (i, san) in sans.iter().enumerate() {
         // move number prefix on white's moves (or first ply of a black-to-move start FEN)

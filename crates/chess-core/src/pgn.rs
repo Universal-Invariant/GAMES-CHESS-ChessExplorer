@@ -405,8 +405,6 @@ impl PgnCursor<std::fs::File> {
                     tags.clear();
                     movetext.clear();
                     parse_tag_line(t, &mut tags);
-                    got_any = true;
-                    blank_seen = false;
                     return Some(g);
                 }
                 parse_tag_line(t, &mut tags);
