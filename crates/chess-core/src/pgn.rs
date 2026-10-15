@@ -224,25 +224,45 @@ pub fn parse_pgn_all(text: &str) -> Vec<Game> {
 }
 
 fn parse_tag_line(l: &str, tags: &mut Vec<(String, String)>) {
-    // [Key "Value"] possibly multiple pairs on one line
-    let mut rest = l;
-    while let Some(stripped) = rest.strip_prefix('[') {
-        if let Some(end) = stripped.rfind(']') {
-            let inner = &stripped[..end];
-            if let Some(q1) = inner.find('"') {
-                if let Some(q2) = inner.rfind('"') {
-                    if q2 > q1 {
-                        let key = inner[..q1].trim().to_string();
-                        let val = inner[q1 + 1..q2].to_string();
-                        tags.retain(|(k, _)| k != &key);
-                        tags.push((key, val));
-                    }
+    // [Key "Value"] possibly multiple pairs on one line.
+    // Scan pair-by-pair (regex-like manual walk) so a greedy rfind(']') can't
+    // swallow several pairs into one and a first-quote/last-quote mismatch can't
+    // merge two values into one.
+    let bytes = l.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'[' {
+            i += 1;
+            continue;
+        }
+        let start = i + 1;
+        // find end of this tag pair: the ']' that follows the closing '"'
+        let mut j = start;
+        let mut in_str = false;
+        while j < bytes.len() {
+            match bytes[j] {
+                b'"' => in_str = !in_str,
+                b']' if !in_str => break,
+                _ => {}
+            }
+            j += 1;
+        }
+        if j >= bytes.len() {
+            break; // unterminated tag line
+        }
+        let inner = &l[start..j];
+        if let Some(q1) = inner.find('"') {
+            if let Some(q2) = inner[q1 + 1..].rfind('"') {
+                let q2 = q1 + 1 + q2;
+                let key = inner[..q1].trim().to_string();
+                let val = inner[q1 + 1..q2].to_string();
+                if !key.is_empty() {
+                    tags.retain(|(k, _)| k != &key);
+                    tags.push((key, val));
                 }
             }
-            rest = stripped[end + 1..].trim_start();
-        } else {
-            break;
         }
+        i = j + 1;
     }
 }
 

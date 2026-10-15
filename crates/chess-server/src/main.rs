@@ -17,12 +17,12 @@ mod http;
 use chess_core::{
     ai::{AiClient, AiConfig},
     analysis::{self, classify_move, default_modules, EvalPoint},
-    board::State,
+    board::{self, State},
     db::GameDb,
     engine::get_engine,
     filters,
     openings::OpeningDb,
-    pgn::PgnCursor,
+    pgn::{self, PgnCursor},
 };
 use http::{HttpServer, Request, Response};
 use serde_json::{json, Value};
@@ -39,6 +39,7 @@ struct AppState {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut port = 8123u16;
+    let mut bind = "127.0.0.1".to_string();
     let mut db_path = "data/games.db".to_string();
     let mut web_root = "web".to_string();
     let mut cli_import: Option<String> = None;
@@ -48,6 +49,10 @@ fn main() {
         match args[i].as_str() {
             "--port" => {
                 port = args.get(i + 1).and_then(|s| s.parse().ok()).unwrap_or(port);
+                i += 1;
+            }
+            "--bind" => {
+                bind = args[i + 1].clone();
                 i += 1;
             }
             "--db" => {
@@ -452,7 +457,129 @@ fn main() {
         }),
     );
 
-    server.serve(&format!("0.0.0.0:{}", port), Some(web_root));
+    // ---- local play (no DB required) --------------------------------------
+
+    server.route(
+        "POST",
+        "/api/legals",
+        Box::new(move |req: &Request| {
+            let body = match http::json_body(req) {
+                Ok(b) => b,
+                Err(e) => return Response::err(&e),
+            };
+            let fen = body["fen"].as_str().unwrap_or("startpos");
+            let st = if fen == "startpos" || fen.is_empty() {
+                State::start()
+            } else {
+                match State::from_fen(fen) {
+                    Some(s) => s,
+                    None => return Response::err("bad fen"),
+                }
+            };
+            let mv = st.legal_moves();
+            let out: Vec<Value> = mv
+                .iter()
+                .map(|m| {
+                    json!({
+                        "uci": pgn::uci_string(*m),
+                        "san": st.san(*m),
+                        "from": board::sq_name(m.from),
+                        "to": board::sq_name(m.to),
+                    })
+                })
+                .collect();
+            Response::json(json!({ "moves": out, "over": st.game_over() }).to_string())
+        }),
+    );
+
+    server.route(
+        "POST",
+        "/api/playmove",
+        Box::new(move |req: &Request| {
+            let body = match http::json_body(req) {
+                Ok(b) => b,
+                Err(e) => return Response::err(&e),
+            };
+            let fen = body["fen"].as_str().unwrap_or("startpos");
+            let uci = body["move"].as_str().unwrap_or("");
+            let mode = body["mode"].as_str().unwrap_or("random");
+            let ms = body["ms"].as_u64().unwrap_or(300);
+            let mut st = if fen == "startpos" || fen.is_empty() {
+                State::start()
+            } else {
+                match State::from_fen(fen) {
+                    Some(s) => s,
+                    None => return Response::err("bad fen"),
+                }
+            };
+            if let Some(mv) = st.find_move_uci(uci) {
+                st = st.make(mv);
+            } else if !uci.is_empty() {
+                return Response::err("illegal move");
+            }
+            if let Some((res, _)) = st.game_over() {
+                return Response::json(
+                    json!({ "fen": st.to_fen(), "reply": null, "over": res }).to_string(),
+                );
+            }
+            // engine reply
+            let reply = if mode == "engine" {
+                let mut eng = get_engine(None);
+                match eng.evaluate(&st.to_fen(), ms) {
+                    Ok(e) => e.best,
+                    Err(_) => String::new(),
+                }
+            } else {
+                // dumb mover: uniform random legal move
+                let lm = st.legal_moves();
+                if lm.is_empty() {
+                    String::new()
+                } else {
+                    let mut seed = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_nanos() as u64)
+                        .unwrap_or(12345)
+                        ^ (lm.len() as u64 * 0x9E3779B97F4A7C15);
+                    seed ^= seed >> 31;
+                    seed = seed.wrapping_mul(0x9E3779B97F4A7C15);
+                    let idx = (seed >> 32) as usize % lm.len();
+                    pgn::uci_string(lm[idx])
+                }
+            };
+            if reply.is_empty() {
+                return Response::json(
+                    json!({ "fen": st.to_fen(), "reply": null, "over": st.game_over().map(|o| o.0) }).to_string(),
+                );
+            }
+            let mut st2 = st;
+            if let Some(mv) = st2.find_move_uci(&reply) {
+                // SAN of the reply computed on the position BEFORE it was made
+                let san = st2.san(mv);
+                st2 = st2.make(mv);
+                return Response::json(
+                    json!({
+                        "fen": st2.to_fen(),
+                        "reply": reply,
+                        "reply_san": san,
+                        "over": st2.game_over().map(|o| o.0),
+                    })
+                    .to_string(),
+                );
+            }
+            Response::json(
+                json!({
+                    "fen": st2.to_fen(),
+                    "reply": reply,
+                    "reply_san": null,
+                    "over": st2.game_over().map(|o| o.0),
+                })
+                .to_string(),
+            )
+        }),
+    );
+
+    // bind to loopback by default; override with --bind (e.g. 0.0.0.0 for LAN use)
+    server.serve(&format!("{}:{}", bind, port), Some(web_root));
 }
 
 fn load_openings() -> OpeningDb {
