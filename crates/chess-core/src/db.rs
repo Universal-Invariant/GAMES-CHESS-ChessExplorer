@@ -39,6 +39,14 @@ pub struct GameDb {
 
 impl GameDb {
     pub fn open(path: &str) -> rusqlite::Result<GameDb> {
+        // auto-create the parent directory so a fresh checkout starts with an empty DB
+        if path != ":memory:" {
+            if let Some(parent) = std::path::Path::new(path).parent() {
+                if !parent.as_os_str().is_empty() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+            }
+        }
         let conn = if path == ":memory:" {
             Connection::open_in_memory()?
         } else {

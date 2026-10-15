@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Chess Visualizer</title>
+<link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+<header>
+  <h1>♞ Chess Visualizer</h1>
+  <nav>
+    <button data-view="play" class="tab active">Play</button>
+    <button data-view="games" class="tab">Game DB</button>
+    <button data-view="explore" class="tab">Openings</button>
+    <button data-view="settings" class="tab">Settings</button>
+  </nav>
+  <span id="status-indicator" class="pill">…</span>
+</header>
+
+<main>
+  <!-- ============ PLAY (local game vs dumb mover / engine) ============ -->
+  <section id="view-play" class="view active">
+    <div class="board-wrap">
+      <canvas id="play-board" width="520" height="520"></canvas>
+      <div id="play-info" class="info-bar">White to move</div>
+    </div>
+    <aside class="panel">
+      <h3>Play a game</h3>
+      <label>Opponent:
+        <select id="play-mode">
+          <option value="random">Dumb mover (random)</option>
+          <option value="engine">Engine (builtin/Stockfish)</option>
+        </select>
+      </label>
+      <div class="row"><button id="play-new">New game</button><button id="play-flip">Flip board</button></div>
+      <div id="play-moves" class="move-list"></div>
+    </aside>
+  </section>
+
+  <!-- ============ GAME DATABASE / PLAYTHROUGH ============ -->
+  <section id="view-games" class="view">
+    <div class="board-wrap">
+      <canvas id="pt-board" width="520" height="520"></canvas>
+      <div class="transport">
+        <button id="tp-prev">⏮</button>
+        <button id="tp-back">◀</button>
+        <button id="tp-play">▶ Play</button>
+        <button id="tp-fwd">▶▶</button>
+        <button id="tp-next">⏭</button>
+        <label>speed <input id="tp-speed" type="range" min="20" max="1200" value="450"/></label>
+        <label>visualizer
+          <select id="tp-viz">
+            <option value="instant">Instant</option>
+            <option value="walk" selected>Walk (continuous)</option>
+            <option value="battle">Battle (overlapped)</option>
+          </select>
+        </label>
+        <label>theme
+          <select id="tp-theme">
+            <option value="classic" selected>Classic</option>
+            <option value="dark">Dark</option>
+            <option value="neon">Neon (threat glow)</option>
+          </select>
+        </label>
+      </div>
+      <div id="pt-info" class="info-bar">Select a game from the list →</div>
+    </div>
+    <aside class="panel">
+      <h3>Import &amp; filter</h3>
+      <div class="row">
+        <input id="import-path" placeholder="/path/to/games.pgn" size="24"/>
+        <button id="import-btn">Import</button>
+      </div>
+      <div class="row">
+        <input id="filter-expr" placeholder='e.g. white_elo >= 2400 and eco = "B90"' size="34"/>
+        <button id="query-btn">Search</button>
+      </div>
+      <div class="row">
+        <label>sort
+          <select id="sort-field">
+            <option>date</option><option>white_elo</option><option>black_elo</option>
+            <option>eco</option><option>num_moves</option><option>score</option>
+          </select>
+        </label>
+        <label><input id="sort-desc" type="checkbox" checked/> desc</label>
+        <button id="shuffle-load">Random games</button>
+      </div>
+      <div id="game-list" class="game-list"></div>
+      <div id="analysis-box" class="analysis-box"></div>
+      <div class="row">
+        <button id="ai-analyze">Ask AI: analyze game</button>
+      </div>
+      <div class="row">
+        <input id="ai-question" placeholder="Ask a question about this position…" size="24"/>
+        <button id="ai-ask">Ask</button>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ============ OPENING EXPLORER ============ -->
+  <section id="view-explore" class="view">
+    <div class="board-wrap">
+      <canvas id="ex-board" width="520" height="520"></canvas>
+      <div id="ex-info" class="info-bar">Start position</div>
+    </div>
+    <aside class="panel">
+      <h3>Opening explorer</h3>
+      <div id="ex-current" class="opening-name"></div>
+      <div id="ex-branches" class="branch-list"></div>
+      <button id="ex-reset">Reset</button>
+      <h4>Most played in your DB</h4>
+      <div id="ex-stats" class="branch-list"></div>
+    </aside>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="view-settings" class="view">
+    <aside class="panel wide">
+      <h3>AI (OpenAI-compatible endpoint)</h3>
+      <div class="row"><label>Base URL <input id="cfg-ai-url" placeholder="http://127.0.0.1:11434/v1" size="36"/></label></div>
+      <div class="row"><label>Model <input id="cfg-ai-model" placeholder="llama3" size="24"/></label>
+        <label>API key <input id="cfg-ai-key" size="24"/></label></div>
+      <h3>Engine</h3>
+      <div class="row"><label>UCI binary <input id="cfg-engine" placeholder="/usr/bin/stockfish (leave empty for builtin)" size="36"/></label></div>
+      <div class="row"><button id="cfg-save">Save</button><span id="cfg-msg"></span></div>
+      <p class="hint">Analysis is saved per-ply into the local database (centipawn eval, best move, blunder/book/good classification) and reused on later loads.</p>
+    </aside>
+  </section>
+</main>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>
